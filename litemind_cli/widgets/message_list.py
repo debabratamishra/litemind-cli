@@ -7,12 +7,11 @@ bold, etc. look good in the terminal.
 
 from __future__ import annotations
 
+import itertools
+
 from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
 from textual.widgets import Markdown, Static
-
-
-import itertools
 
 _id_counter = itertools.count(1)
 
