@@ -24,7 +24,7 @@ from textual.widgets import Button, DataTable, Input, Label, Select, Static
 
 from ..config import config
 from ..services.rag_service import rag_service
-from ..widgets.message_list import MessageList
+from ..widgets.message_list import MessageBubble, MessageList
 
 _OR_PLACEHOLDER  = "e.g. openai/gpt-4o  or  meta-llama/llama-3.3-70b-instruct"
 _NIM_PLACEHOLDER = "e.g. meta/llama-3.3-70b-instruct"
@@ -45,6 +45,8 @@ class RAGPanel(Widget):
     BINDINGS = [
         Binding("ctrl+l", "clear_chat",     "Clear chat"),
         Binding("ctrl+r", "refresh_files",  "Refresh files"),
+        Binding("super+c", "copy_message",  "Copy last msg"),
+        Binding("super+v", "paste_message", "Paste"),
     ]
 
     DEFAULT_CSS = """
@@ -418,3 +420,19 @@ class RAGPanel(Widget):
 
     def action_refresh_files(self) -> None:
         self.refresh_files()
+
+    def action_copy_message(self) -> None:
+        """Copy the last assistant message to the system clipboard."""
+        msg_list: MessageList = self.query_one("#message-list", MessageList)
+        for child in reversed(list(msg_list.children)):
+            if isinstance(child, MessageBubble) and child._role == "assistant":
+                self.app.copy_to_clipboard(child._content)
+                self.app.notify("Copied to clipboard")
+                return
+        self.app.notify("No assistant message to copy", severity="warning")
+
+    def action_paste_message(self) -> None:
+        """Paste clipboard content into the message input."""
+        inp: Input = self.query_one("#message-input", Input)
+        inp.focus()
+        inp.value = self.app.clipboard

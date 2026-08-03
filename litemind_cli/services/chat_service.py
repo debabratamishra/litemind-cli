@@ -95,7 +95,9 @@ class ChatService:
             session_id=session_id,
         )
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
+        headers = self._auth_headers()
+
+        async with httpx.AsyncClient(timeout=self._timeout, headers=headers) as client:
             async with client.stream("POST", f"{self._base}/api/chat/stream", json=payload) as resp:
                 resp.raise_for_status()
                 # The backend sends SSE lines: "data: {...}\n\n"
@@ -143,7 +145,9 @@ class ChatService:
         if session_id:
             payload["session_id"] = session_id
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
+        headers = self._auth_headers()
+
+        async with httpx.AsyncClient(timeout=self._timeout, headers=headers) as client:
             async with client.stream("POST", f"{self._base}/api/chat/web-search", json=payload) as resp:
                 resp.raise_for_status()
                 async for chunk in resp.aiter_text():
@@ -176,6 +180,13 @@ class ChatService:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _auth_headers(self) -> dict[str, str]:
+        """Return an Authorization header dict when a backend token is available."""
+        token = config.backend_token
+        if token:
+            return {"Authorization": f"Bearer {token}"}
+        return {}
 
     def _build_payload(
         self,

@@ -117,6 +117,11 @@ class SettingsPanel(Widget):
                 yield Input(value=config.api_key or "", placeholder="sk-…",
                             id="input-api-key", password=True, classes="field-input")
 
+            with Horizontal(classes="field-row"):
+                yield Label("Backend token", classes="field-label")
+                yield Input(value=config.backend_token or "", placeholder="JWT token",
+                            id="input-backend-token", password=True, classes="field-input")
+
             yield Static("── Generation parameters ────────────────────", classes="section-header")
 
             with Horizontal(classes="field-row"):
@@ -211,6 +216,7 @@ class SettingsPanel(Widget):
             config.default_model = m
         config.api_base = _text("#input-api-base") or None
         config.api_key  = _text("#input-api-key")  or None
+        config.backend_token = _text("#input-backend-token") or None
 
         # --- Generation ---
         for wid, name, attr in [

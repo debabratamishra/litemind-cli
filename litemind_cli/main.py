@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Annotated, Optional
 
+import httpx
 import typer
 
 from . import __version__
@@ -88,6 +89,50 @@ def rag(
 ) -> None:
     """Open the TUI on the RAG screen."""
     _run_tui(tab="rag", backend=backend, model=model)
+
+
+@app.command()
+def login(
+    backend: Annotated[
+        Optional[str],
+        typer.Option("--backend", "-b", help="Backend URL"),
+    ] = None,
+) -> None:
+    """Authenticate with the backend and save the session token."""
+    import asyncio
+
+    from .config import config
+
+    if backend:
+        config.fastapi_url = backend
+
+    email = typer.prompt("Email")
+    password = typer.prompt("Password", hide_input=True)
+
+    async def _login() -> None:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            r = await client.post(
+                f"{config.fastapi_url}/api/auth/login",
+                json={"email": email, "password": password},
+            )
+        if r.status_code == 200:
+            token = r.json().get("access_token")
+            if token:
+                config.backend_token = token
+                typer.echo(typer.style("✓ Login successful", fg=typer.colors.GREEN))
+            else:
+                typer.echo(typer.style("✗ No token in response", fg=typer.colors.RED))
+                raise typer.Exit(code=1)
+        else:
+            typer.echo(
+                typer.style(
+                    f"✗ Login failed ({r.status_code}): {r.text}",
+                    fg=typer.colors.RED,
+                )
+            )
+            raise typer.Exit(code=1)
+
+    asyncio.run(_login())
 
 
 @app.command()

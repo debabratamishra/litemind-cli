@@ -211,7 +211,12 @@ class RAGService:
         if session_id:
             payload["session_id"] = session_id
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
+        headers = {}
+        token = config.backend_token
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        async with httpx.AsyncClient(timeout=self._timeout, headers=headers) as client:
             async with client.stream(
                 "POST", f"{self._base}/api/rag/query", json=payload
             ) as response:

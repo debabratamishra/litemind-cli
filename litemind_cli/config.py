@@ -44,6 +44,9 @@ class Config:
     api_key: str | None = field(
         default_factory=lambda: os.getenv("API_KEY")
     )
+    backend_token: str | None = field(
+        default_factory=lambda: os.getenv("BACKEND_TOKEN")
+    )
 
     # Generation defaults — match the litemind-ui frontend defaults
     temperature: float = 0.7

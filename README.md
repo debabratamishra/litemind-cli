@@ -98,6 +98,7 @@ Options:
 Commands:
   chat    Open the TUI on the Chat tab
   rag     Open the TUI on the RAG tab
+  login   Authenticate with the backend and save your JWT token
   status  Check backend connectivity and print available models
 ```
 
@@ -118,7 +119,50 @@ litemind-cli --model mistral:7b
 
 # Check if the backend is reachable
 litemind-cli status
+
+# Authenticate with the backend (required for chat/rag when auth is enabled)
+litemind-cli login
+
+# Login against a specific backend
+litemind-cli login --backend http://192.168.1.10:8000
 ```
+
+### Authentication
+
+The LiteMindUI backend uses GoTrue (Supabase) for authentication. When the
+backend has auth enabled, the CLI needs a JWT token to access chat and RAG
+endpoints.
+
+**To get a token:**
+
+1. Run `litemind-cli login` — you'll be prompted for your email and password.
+   The CLI calls the backend's `/api/auth/login` endpoint and stores the token
+   in memory for the session.
+2. Or set `BACKEND_TOKEN` in your `.env` file with a pre-generated JWT.
+
+**To generate a token manually** (e.g., for CI or scripting):
+
+```bash
+# Using Python with PyJWT (install: pip install PyJWT)
+python3 -c "
+import jwt, time
+secret = '<GOTRUE_JWT_SECRET from the backend .env>'
+now = int(time.time())
+payload = {
+    'sub': 'cli-user',
+    'email': 'you@example.com',
+    'user_metadata': {'name': 'CLI User'},
+    'iat': now,
+    'exp': now + 86400 * 30,   # 30 days
+}
+print(jwt.encode(payload, secret, algorithm='HS256'))
+"
+```
+
+The `GOTRUE_JWT_SECRET` is found in the backend's `.env` file. The token
+must be a valid HS256 JWT with a `sub` claim.
+
+---
 
 ---
 
@@ -166,6 +210,8 @@ Supported formats: PDF, DOCX, TXT, MD, CSV, XLSX, PPTX, HTML, ODT, RTF, YAML, JS
 | `Ctrl+N` | Start a new chat session |
 | `Ctrl+R` | Refresh RAG file list *(RAG tab only)* |
 | `Ctrl+S` | Save settings *(Settings tab only)* |
+| `Cmd+C` | Copy last assistant message to clipboard |
+| `Cmd+V` | Paste clipboard into message input |
 | `Q` | Quit |
 
 ---
@@ -181,18 +227,20 @@ environment variables. CLI flags always take precedence.
 | `DEFAULT_BACKEND` | `ollama` | Provider: `ollama` · `openrouter` · `nim` |
 | `DEFAULT_MODEL` | `llama3.2` | Default model name |
 | `API_BASE` | *(empty)* | Override provider API base URL |
-| `API_KEY` | *(empty)* | Provider API key |
+| `API_KEY` | *(empty)* | Provider API key (for openrouter / nim) |
+| `BACKEND_TOKEN` | *(empty)* | JWT token for backend auth — set via `litemind-cli login` |
 | `CONNECT_TIMEOUT` | `5` | HTTP connect timeout in seconds |
 | `READ_TIMEOUT` | `600` | HTTP read/stream timeout in seconds |
 | `LOG_LEVEL` | `INFO` | `DEBUG` · `INFO` · `WARNING` · `ERROR` |
 
-Example `.env` for OpenRouter:
+Example `.env` for OpenRouter with backend auth:
 
 ```env
 FASTAPI_URL=http://localhost:8000
 DEFAULT_BACKEND=openrouter
 DEFAULT_MODEL=openai/gpt-4o-mini
 API_KEY=sk-or-your-key-here
+BACKEND_TOKEN=eyJhbGciOiJIUzI1NiIs...
 ```
 
 ---
