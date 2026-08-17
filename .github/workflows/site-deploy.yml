@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: pages
@@ -37,25 +38,39 @@ jobs:
       - name: Build static site
         run: npm run build --prefix site
 
-      - name: Deploy to docs/ directory on main branch
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
+
+      - name: Import GPG key
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import
+          git config --global user.signingkey ${{ secrets.GPG_KEY_ID }}
+          git config --global commit.gpgsign true
+
+      - name: Deploy to temp branch and open PR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Remove old docs/ (if any) and copy fresh build output
           rm -rf docs
           mkdir -p docs
           cp -r site/out/* docs/
-          # .nojekyll prevents Jekyll from processing the static site
           touch docs/.nojekyll
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Commit and push the built site to main
-          git add docs/
-          if git diff --quiet --cached; then
-            echo "No changes to deploy"
+          BRANCH_NAME="gh-pages-deploy-${{ github.run_id }}"
+          git checkout -b "$BRANCH_NAME"
+          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" add docs/
+          if ! git diff --quiet --cached; then
+            git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" commit -S -m "Deploy GitHub Pages site [skip ci]"
+            git push origin "$BRANCH_NAME"
+            gh pr create \
+              --title "Deploy GitHub Pages (run ${{ github.run_id }})" \
+              --body "Automated PR from the site‑deploy workflow." \
+              --base main \
+              --head "$BRANCH_NAME" \
+              --label "autodeploy" \
+              --auto-merge --merge-method merge
           else
-            git commit -m "Deploy GitHub Pages site [skip ci]"
-            git push origin HEAD:main
+            echo "No changes to deploy"
           fi
