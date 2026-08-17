@@ -69,8 +69,7 @@ jobs:
               --body "Automated PR from the site‑deploy workflow." \
               --base main \
               --head "$BRANCH_NAME" \
-              --label "autodeploy" \
-              --auto-merge --merge-method merge
+              --label "autodeploy"
           else
             echo "No changes to deploy"
           fi
