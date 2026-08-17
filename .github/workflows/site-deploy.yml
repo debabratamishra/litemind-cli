@@ -1,0 +1,61 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'site/**'
+      - '.github/workflows/site-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'site/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci --prefix site
+
+      - name: Build static site
+        run: npm run build --prefix site
+
+      - name: Deploy to docs/ directory on main branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Remove old docs/ (if any) and copy fresh build output
+          rm -rf docs
+          mkdir -p docs
+          cp -r site/out/* docs/
+          # .nojekyll prevents Jekyll from processing the static site
+          touch docs/.nojekyll
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Commit and push the built site to main
+          git add docs/
+          if git diff --quiet --cached; then
+            echo "No changes to deploy"
+          else
+            git commit -m "Deploy GitHub Pages site [skip ci]"
+            git push origin HEAD:main
+          fi

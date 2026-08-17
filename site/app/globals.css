@@ -1,0 +1,377 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === Design Tokens (Terminal-inspired, professional light theme) === */
+:root {
+  /* Page canvas — soft light gray like a code editor */
+  --canvas: #f8fafc;
+  --canvas-strong: #f1f5f9;
+
+  /* Terminal window surface */
+  --terminal-bg: #0a0a0e;
+  --terminal-fg: #e4e4e7;
+  --terminal-muted: #71717a;
+  --terminal-border: #1a1a22;
+
+  /* Content surface */
+  --paper: #ffffff;
+  --paper-border: #e2e8f0;
+
+  /* Text */
+  --ink: #0f172a;
+  --ink-weak: #64748a;
+  --ink-weaker: #94a3b8;
+
+  /* Terminal colors — used as accents */
+  --stdout: #22c55e;     /* terminal green — links, CTAs, accents */
+  --cursor: #3b82f6;     /* terminal blue — hover/focus states */
+  --prompt: #fbbf24;     /* terminal amber — command prompts */
+  --stderr: #ef4444;     /* terminal red — errors */
+}
+
+/* === Base reset === */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 4rem;
+  }
+}
+
+body {
+  background-color: var(--canvas);
+  color: var(--ink);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* === Terminal Window Component === */
+.terminal-window {
+  background-color: var(--terminal-bg);
+  border: 1px solid var(--terminal-border);
+  border-radius: 10px;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  overflow: hidden;
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  position: relative;
+}
+
+.terminal-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.8rem;
+  background: linear-gradient(to right, #1a1a22, #15151d);
+  border-bottom: 1px solid var(--terminal-border);
+  font-size: 0.75rem;
+  color: var(--terminal-muted);
+}
+
+.terminal-dot {
+  width: 0.72rem;
+  height: 0.72rem;
+  border-radius: 50%;
+  display: inline-block;
+}
+.terminal-dot.red   { background: #ff5f56; }
+.terminal-dot.amber { background: #ffc038; }
+.terminal-dot.green { background: #2ecc40; }
+
+.terminal-content {
+  padding: 1rem 1.25rem;
+  color: var(--terminal-fg);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Each line in the terminal content */
+.terminal-content .terminal-line {
+  display: block;
+}
+
+/* Prompt styling — the $ symbol */
+.terminal-prompt {
+  color: var(--prompt);
+}
+
+/* Output text — stdout green */
+.terminal-output {
+  color: var(--stdout);
+}
+
+/* Success marker */
+.terminal-success {
+  color: var(--stdout);
+}
+
+/* Error/warning text */
+.terminal-error {
+  color: var(--stderr);
+}
+
+/* Muted terminal text */
+.terminal-dim {
+  color: var(--terminal-muted);
+}
+
+/* Blinking cursor for simulated typing */
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.terminal-cursor {
+  display: inline-block;
+  width: 0.55rem;
+  background-color: var(--stdout);
+  animation: blink 1s step-end infinite;
+  margin-left: 2px;
+}
+
+/* === Typing animation — lines fade in sequentially === */
+@keyframes terminal-fade {
+  0% { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.terminal-line {
+  opacity: 0;
+  animation: terminal-fade 0.4s ease-out forwards;
+}
+
+/* === Page sections === */
+.section {
+  padding: 5rem 0;
+}
+
+.section-alt {
+  background-color: var(--canvas-strong);
+  padding: 5rem 0;
+}
+
+.container {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .container { padding: 0 1rem; }
+  .section { padding: 3rem 0; }
+  .section-alt { padding: 3rem 0; }
+  .hero-ctas { gap: 0.5rem; }
+}
+
+/* === Badges === */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  font-family: 'Inter', sans-serif;
+}
+
+.badge-python {
+  background: linear-gradient(135deg, #3776ab, #e8f0fe);
+  color: #1e3a8a;
+}
+
+.badge-license {
+  background: linear-gradient(135deg, #6366f1, #e0e7ff);
+  color: #312e81;
+}
+
+/* === Terminal-style inline code (in terminal blocks) === */
+.code-block .code-inline {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.85rem;
+  background-color: var(--terminal-bg);
+  color: var(--terminal-fg);
+  border: 1px solid var(--terminal-border);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+}
+
+/* === Inline code in prose (light theme) === */
+.code-inline {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.85rem;
+  background-color: var(--canvas-strong);
+  color: var(--stdout);
+  border: 1px solid var(--paper-border);
+  border-radius: 4px;
+  padding: 0.1rem 0.45rem;
+}
+
+/* === Terminal-style code blocks === */
+.code-block {
+  background-color: var(--terminal-bg);
+  border: 1px solid var(--terminal-border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  font-size: 0.875rem;
+  overflow-x: auto;
+  color: var(--terminal-fg);
+  line-height: 1.5;
+}
+
+.code-block .comment { color: var(--terminal-muted); }
+.code-block .prompt  { color: var(--prompt); }
+.code-block .output  { color: var(--stdout); }
+.code-block .error   { color: var(--stderr); }
+.code-block .keyword { color: #c084fc; }
+.code-block .string  { color: #fb92b2; }
+.code-block .func    { color: #60a5fa; }
+.code-block .success { color: var(--stdout); }
+
+/* === Link styling — terminal green === */
+a {
+  color: var(--stdout);
+  text-decoration: none;
+  text-underline-offset: 2px;
+  transition: opacity 0.15s ease;
+}
+a:hover {
+  opacity: 0.8;
+}
+
+/* === Buttons === */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 0.4rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  cursor: pointer;
+  border: none;
+  padding: 0.55rem 1.2rem;
+  transition: opacity 0.15s ease, transform 0.05s ease;
+}
+
+/* Hero CTA pair — even spacing that survives flex/JIT collapse */
+.hero-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Hero grid — gap between text/CTAs and terminal (v4 gap-* utilities are unreliable here) */
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3rem;
+}
+@media (min-width: 1024px) {
+  .hero-grid { grid-template-columns: 1fr 1fr; gap: 4rem; }
+}
+.btn:active { transform: scale(0.98); }
+
+.btn-primary {
+  background-color: var(--stdout);
+  color: var(--terminal-bg);
+  font-weight: 600;
+}
+.btn-primary:hover { opacity: 0.85; }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--paper-border);
+  color: var(--ink);
+}
+.btn-ghost:hover {
+  background: var(--canvas-strong);
+}
+
+/* === Feature card === */
+.feature-card {
+  background-color: var(--paper);
+  border: 1px solid var(--paper-border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: box-shadow 0.2s ease, transform 0.05s ease;
+}
+.feature-card:hover {
+  box-shadow:
+    0 10px 25px rgba(0, 0, 0, 0.06),
+    0 4px 6px rgba(0, 0, 0, 0.02);
+  transform: translateY(-2px);
+}
+
+/* === Features — vertical stack with consistent width === */
+.features-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  align-items: center;
+}
+.feature-card {
+  max-width: 36rem;
+  width: 100%;
+}
+
+/* === Grid === */
+.grid-3 {
+  display: grid;
+  gap: 1.5rem;
+}
+@media (min-width: 640px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { .grid-3 { grid-template-columns: repeat(3, 1fr); } }
+
+.grid-2 {
+  display: grid;
+  gap: 1.5rem;
+}
+@media (min-width: 640px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+
+/* === Step number === */
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.4rem;
+  background-color: var(--stdout);
+  color: var(--terminal-bg);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+/* === Utility ==*/
+.text-center { text-align: center; }
+.text-muted  { color: var(--ink-weak); }
+.text-dim    { color: var(--ink-weaker); }
+.font-mono   { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+/* === Reduced motion === */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .terminal-line { opacity: 1 !important; animation: none !important; }
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
