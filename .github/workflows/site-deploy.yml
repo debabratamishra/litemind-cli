@@ -68,8 +68,7 @@ jobs:
               --title "Deploy GitHub Pages (run ${{ github.run_id }})" \
               --body "Automated PR from the site‑deploy workflow." \
               --base main \
-              --head "$BRANCH_NAME" \
-              --label "autodeploy"
+              --head "$BRANCH_NAME"
           else
             echo "No changes to deploy"
           fi
