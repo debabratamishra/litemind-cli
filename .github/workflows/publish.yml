@@ -1,13 +1,15 @@
-name: Publish to PyPI
+name: Publish to PyPI (tag safety net)
+
+# This workflow is a safety net only.
+# The primary release flow is handled by release.yml (workflow_dispatch or
+# pyproject.toml push to main). This workflow fires if a v* tag is pushed
+# manually outside of the release.yml flow, ensuring PyPI always stays in sync.
 
 on:
   push:
     tags:
       - "v*.*.*"
-  workflow_dispatch:
 
-# id-token: write enables PyPI trusted publishing (OIDC) — no stored secret needed.
-# contents: write lets us create the GitHub Release and upload assets.
 permissions:
   contents: write
   id-token: write
@@ -42,13 +44,26 @@ jobs:
           PKG=$(grep -m1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
           echo "Tag: $TAG  pyproject: $PKG"
           if [ "$TAG" != "$PKG" ]; then
-            echo "::error::Git tag ($TAG) does not match pyproject version ($PKG). Bump version in pyproject.toml before tagging."
+            echo "::error::Git tag ($TAG) does not match pyproject version ($PKG)."
             exit 1
           fi
 
-      - name: Generate changelog with git-cliff
+      - name: Check if GitHub Release already exists
+        id: check_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release $TAG already exists — skipping."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate release notes with git-cliff
+        if: steps.check_release.outputs.exists == 'false'
         uses: orhun/git-cliff-action@v4
-        id: changelog
         with:
           config: cliff.toml
           args: --latest --strip header
@@ -57,21 +72,18 @@ jobs:
           GITHUB_REPO: ${{ github.repository }}
 
       - name: Build distributions
+        if: steps.check_release.outputs.exists == 'false'
         run: uv build
 
       - name: Publish to PyPI (trusted publishing / OIDC)
+        if: steps.check_release.outputs.exists == 'false'
         uses: pypa/gh-action-pypi-publish@release/v1
 
       - name: Create GitHub Release
+        if: steps.check_release.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
           body_path: RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Trigger Site Deploy
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run site-deploy.yml --ref main

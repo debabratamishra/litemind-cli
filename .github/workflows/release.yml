@@ -1,0 +1,171 @@
+name: Release & Publish
+
+# Triggers:
+#   1. Manual: workflow_dispatch lets you pick a version bump (patch/minor/major)
+#      and optionally override the exact version.
+#   2. Automatic: any push to main that touches pyproject.toml and carries a
+#      new version not yet tagged will create the tag, release, and publish.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pyproject.toml'
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type (ignored if version_override is set)'
+        required: false
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      version_override:
+        description: 'Exact version to release (e.g. 1.2.3) — overrides bump'
+        required: false
+        default: ''
+
+permissions:
+  contents: write   # push tags, create releases
+  id-token: write   # PyPI trusted publishing (OIDC)
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # ── 1. Checkout (full history for git-cliff) ──────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use GH_PAT so that the tag push from this job can also
+          # trigger any other tag-based workflows if added in future.
+          token: ${{ secrets.GH_PAT || github.token }}
+
+      # ── 2. Determine target version ──────────────────────────────────────
+      - name: Determine version
+        id: ver
+        run: |
+          set -e
+
+          CURRENT=$(grep -m1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+
+          if [ -n "${{ inputs.version_override }}" ]; then
+            NEW="${{ inputs.version_override }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Parse semver and bump the requested component
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+            case "${{ inputs.bump }}" in
+              major) NEW="$((MAJOR+1)).0.0" ;;
+              minor) NEW="${MAJOR}.$((MINOR+1)).0" ;;
+              *)     NEW="${MAJOR}.${MINOR}.$((PATCH+1))" ;;
+            esac
+          else
+            # push trigger — use whatever is already in pyproject.toml
+            NEW="$CURRENT"
+          fi
+
+          echo "new=$NEW" >> $GITHUB_OUTPUT
+          echo "tag=v${NEW}" >> $GITHUB_OUTPUT
+          echo "Resolved version: $NEW (tag: v${NEW})"
+
+      # ── 3. Check the tag doesn't already exist ────────────────────────────
+      - name: Abort if tag already exists
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          if git rev-parse "$TAG" > /dev/null 2>&1; then
+            echo "::notice::Tag $TAG already exists — nothing to do. Exiting."
+            echo "SKIP=true" >> $GITHUB_ENV
+          else
+            echo "SKIP=false" >> $GITHUB_ENV
+          fi
+
+      # ── 4. Bump version in pyproject.toml (only for workflow_dispatch) ────
+      - name: Bump version in pyproject.toml
+        if: env.SKIP == 'false' && github.event_name == 'workflow_dispatch'
+        run: |
+          CURRENT="${{ steps.ver.outputs.current }}"
+          NEW="${{ steps.ver.outputs.new }}"
+          sed -i "s/^version = \"${CURRENT}\"/version = \"${NEW}\"/" pyproject.toml
+          grep '^version' pyproject.toml   # sanity-check
+
+      # ── 5. Commit + tag ───────────────────────────────────────────────────
+      - name: Commit version bump and create tag
+        if: env.SKIP == 'false'
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          NEW="${{ steps.ver.outputs.new }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Only commit if pyproject.toml was actually changed
+          if ! git diff --quiet pyproject.toml; then
+            git add pyproject.toml
+            git commit -m "chore(release): bump version to ${NEW} [skip ci]"
+            git push origin main
+          fi
+
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      # ── 6. Generate changelog ─────────────────────────────────────────────
+      - name: Generate release notes with git-cliff
+        if: env.SKIP == 'false'
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      # ── 7. Set up build tools ─────────────────────────────────────────────
+      - name: Set up Python
+        if: env.SKIP == 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        if: env.SKIP == 'false'
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # ── 8. Build ──────────────────────────────────────────────────────────
+      - name: Build distributions
+        if: env.SKIP == 'false'
+        run: uv build
+
+      # ── 9. Publish to PyPI via OIDC trusted publishing ────────────────────
+      - name: Publish to PyPI
+        if: env.SKIP == 'false'
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      # ── 10. Create GitHub Release ─────────────────────────────────────────
+      - name: Create GitHub Release
+        if: env.SKIP == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          body_path: RELEASE_NOTES.md
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 11. Trigger site deploy ───────────────────────────────────────────
+      - name: Trigger Site Deploy
+        if: env.SKIP == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run site-deploy.yml --ref main
