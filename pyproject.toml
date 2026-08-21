@@ -1,6 +1,6 @@
 [project]
 name = "litemind-cli"
-version = "0.0.2"
+version = "0.0.3"
 description = "LiteMind CLI - A terminal user interface for the LiteMindUI"
 readme = "README.md"
 requires-python = ">=3.11"
