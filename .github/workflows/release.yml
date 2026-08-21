@@ -4,7 +4,8 @@ name: Release & Publish
 #   1. Manual: workflow_dispatch lets you pick a version bump (patch/minor/major)
 #      and optionally override the exact version.
 #   2. Automatic: any push to main that touches pyproject.toml and carries a
-#      new version not yet tagged will create the tag, release, and publish.
+#      new version not yet released will build, publish to PyPI, and create
+#      a GitHub Release — all in one job, no inter-workflow triggering needed.
 on:
   push:
     branches:
@@ -26,6 +27,14 @@ on:
         description: 'Exact version to release (e.g. 1.2.3) — overrides bump'
         required: false
         default: ''
+      force:
+        description: 'Force release even if tag already exists (re-publishes)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 permissions:
   contents: write   # push tags, create releases
@@ -46,8 +55,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Use GH_PAT so that the tag push from this job can also
-          # trigger any other tag-based workflows if added in future.
           token: ${{ secrets.GH_PAT || github.token }}
 
       # ── 2. Determine target version ──────────────────────────────────────
@@ -78,29 +85,49 @@ jobs:
           echo "tag=v${NEW}" >> $GITHUB_OUTPUT
           echo "Resolved version: $NEW (tag: v${NEW})"
 
-      # ── 3. Check the tag doesn't already exist ────────────────────────────
-      - name: Abort if tag already exists
+      # ── 3. Determine whether to skip ────────────────────────────────────
+      # Skip if: GitHub Release already exists AND force != true.
+      # We check the Release (not just the tag) so re-running after a
+      # partial failure (tag created but release/publish failed) is safe.
+      - name: Check if GitHub Release already exists
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.ver.outputs.tag }}"
-          if git rev-parse "$TAG" > /dev/null 2>&1; then
-            echo "::notice::Tag $TAG already exists — nothing to do. Exiting."
-            echo "SKIP=true" >> $GITHUB_ENV
+          FORCE="${{ inputs.force }}"
+
+          if [ "$FORCE" = "true" ]; then
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+            echo "Force mode — will re-publish."
+          elif gh release view "$TAG" > /dev/null 2>&1; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+            echo "::notice::Release $TAG already exists — nothing to do."
           else
-            echo "SKIP=false" >> $GITHUB_ENV
+            echo "skip=false" >> $GITHUB_OUTPUT
+            # Check separately if the tag exists (to avoid double-creating it)
+            if git rev-parse "$TAG" > /dev/null 2>&1; then
+              echo "tag_exists=true" >> $GITHUB_OUTPUT
+              echo "Tag exists but no Release — will publish/release without re-tagging."
+            else
+              echo "tag_exists=false" >> $GITHUB_OUTPUT
+            fi
           fi
 
       # ── 4. Bump version in pyproject.toml (only for workflow_dispatch) ────
       - name: Bump version in pyproject.toml
-        if: env.SKIP == 'false' && github.event_name == 'workflow_dispatch'
+        if: steps.check.outputs.skip == 'false' && github.event_name == 'workflow_dispatch' && steps.check.outputs.tag_exists == 'false'
         run: |
           CURRENT="${{ steps.ver.outputs.current }}"
           NEW="${{ steps.ver.outputs.new }}"
           sed -i "s/^version = \"${CURRENT}\"/version = \"${NEW}\"/" pyproject.toml
           grep '^version' pyproject.toml   # sanity-check
 
-      # ── 5. Commit + tag ───────────────────────────────────────────────────
+      # ── 5. Commit + tag (skip if tag already exists) ──────────────────────
       - name: Commit version bump and create tag
-        if: env.SKIP == 'false'
+        if: steps.check.outputs.skip == 'false' && steps.check.outputs.tag_exists == 'false'
         run: |
           TAG="${{ steps.ver.outputs.tag }}"
           NEW="${{ steps.ver.outputs.new }}"
@@ -119,7 +146,7 @@ jobs:
 
       # ── 6. Generate changelog ─────────────────────────────────────────────
       - name: Generate release notes with git-cliff
-        if: env.SKIP == 'false'
+        if: steps.check.outputs.skip == 'false'
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
@@ -130,30 +157,30 @@ jobs:
 
       # ── 7. Set up build tools ─────────────────────────────────────────────
       - name: Set up Python
-        if: env.SKIP == 'false'
+        if: steps.check.outputs.skip == 'false'
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
       - name: Install uv
-        if: env.SKIP == 'false'
+        if: steps.check.outputs.skip == 'false'
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
 
       # ── 8. Build ──────────────────────────────────────────────────────────
       - name: Build distributions
-        if: env.SKIP == 'false'
+        if: steps.check.outputs.skip == 'false'
         run: uv build
 
       # ── 9. Publish to PyPI via OIDC trusted publishing ────────────────────
       - name: Publish to PyPI
-        if: env.SKIP == 'false'
+        if: steps.check.outputs.skip == 'false'
         uses: pypa/gh-action-pypi-publish@release/v1
 
       # ── 10. Create GitHub Release ─────────────────────────────────────────
       - name: Create GitHub Release
-        if: env.SKIP == 'false'
+        if: steps.check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
@@ -165,7 +192,7 @@ jobs:
 
       # ── 11. Trigger site deploy ───────────────────────────────────────────
       - name: Trigger Site Deploy
-        if: env.SKIP == 'false'
+        if: steps.check.outputs.skip == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow run site-deploy.yml --ref main
