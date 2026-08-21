@@ -17,8 +17,8 @@ body = """
     {% for commit in commits %}
         - {% if commit.scope %}**{{ commit.scope }}**: {% endif %}\
           {{ commit.message | upper_first }}\
-          {% if commit.remote.username %} by @{{ commit.remote.username }}{% endif %}\
-          {% if commit.remote.pr_number %} ([#{{ commit.remote.pr_number }}]({{ commit.remote.pr_url }})){% endif %}\
+          {% if commit.remote and commit.remote.username %} by @{{ commit.remote.username }}{% endif %}\
+          {% if commit.remote and commit.remote.pr_number %} ([#{{ commit.remote.pr_number }}](https://github.com/debabratamishra/litemind-cli/pull/{{ commit.remote.pr_number }})){% endif %}\
     {% endfor %}
 {% endfor %}\n
 """
