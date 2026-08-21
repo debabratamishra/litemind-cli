@@ -164,7 +164,6 @@ must be a valid HS256 JWT with a `sub` claim.
 
 ---
 
----
 
 ## Inside the TUI
 

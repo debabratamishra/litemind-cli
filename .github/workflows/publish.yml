@@ -6,7 +6,7 @@ on:
       - "v*.*.*"
   workflow_dispatch:
 
-# id-token: write enables PyPI trusted publishing (OIDC) — no stored secret.
+# id-token: write enables PyPI trusted publishing (OIDC) — no stored secret needed.
 # contents: write lets us create the GitHub Release and upload assets.
 permissions:
   contents: write
@@ -46,17 +46,27 @@ jobs:
             exit 1
           fi
 
+      - name: Generate changelog with git-cliff
+        uses: orhun/git-cliff-action@v4
+        id: changelog
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
+          GITHUB_REPO: ${{ github.repository }}
+
       - name: Build distributions
         run: uv build
 
-      - name: Publish to PyPI (trusted publishing)
+      - name: Publish to PyPI (trusted publishing / OIDC)
         uses: pypa/gh-action-pypi-publish@release/v1
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
